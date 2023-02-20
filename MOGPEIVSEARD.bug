@@ -1,0 +1,339 @@
+model{
+  
+  Yt ~ dmnorm(mu, S.inv)          # the EIV GP prior with mean mu and precision S.inv
+                                  # (Yt is column vector for all true values on both outputs)
+                                  # The true values for the first output are stacked
+                                  # on the true values for the second output
+  
+  S.inv <- inverse(S)             # have to invert the covariance matrix as JAGS
+                                  # uses precision matrix for dmnorm
+  
+  for(i_1 in 1:n_m){              # adding the model error variance onto diagonal
+                                  # elements of covariance matrices
+                                  # T_1_otimes_K_1 and T_2_otimes_K_2
+  
+    S[i_1, i_1] <- pow(sigma[1], 2) + T_1_otimes_K_1[i_1, i_1] + T_2_otimes_K_2[i_1, i_1]    
+    # diagonal elements of S (for first n_m diagonals)
+    
+    S[(i_1 + n_m),
+      (i_1 + n_m)] <- pow(sigma[2], 2) + T_1_otimes_K_1[(i_1 + n_m),
+                                                        (i_1 + n_m)] + T_2_otimes_K_2[(i_1 + n_m),
+                                                                                      (i_1 + n_m)]
+    # diagonal elements of S (last n_m diagonals)
+    
+  }
+  
+  for(i_1 in 1:(2*n_m)){
+  
+    for(i_2 in (1+i_1):(2*n_m)){                      
+    
+      S[i_1, i_2] <- T_1_otimes_K_1[i_1, i_2] + T_2_otimes_K_2[i_1, i_2]
+      
+      # off-diagonal elements of S
+      
+      S[i_2, i_1] <- S[i_1, i_2]
+    
+    }
+  
+  }
+  
+  # Need to create the Kronecker products between
+  # T_1 and K_1, T_1_otimes_K_1, and T_2 and K_2,
+  # T_2_otimes_K_2
+  # T_1_otimes_K_1 is a 2*n_m by 2*n_m matrix, i.e. made up of four
+  # n_m by n_m block matrices (as is T_2_otimes_K_2)
+  # the top-left block matrix is the product between the
+  # top-left element of T and the elements of K
+  # the top-right block matrix is the product between the
+  # top-right element of T and the elements of K
+  # the bottom-left block matrix is the same
+  # as the top-right block matrix
+  # the bottom-right block matrix is the product between
+  # the bottom-right element of T and the elements of K
+  
+  for(i_1 in 1:n_m){
+    
+    # firstly looking at T_1_otimes_K_1
+    
+    T_1_otimes_K_1[i_1, i_1] <- T_1[1, 1] * K_1[i_1, i_1]                    
+    # diagonal elements of top left block
+    
+    T_1_otimes_K_1[i_1, (i_1 + n_m)] <- T_1[1, 2] * K_1[i_1, i_1]           
+    # diagonal elements of top right block
+    
+    T_1_otimes_K_1[(i_1 + n_m), i_1] <- T_1[2, 1] * K_1[i_1, i_1]           
+    # diagonal elements of bottom left block
+    
+    T_1_otimes_K_1[(i_1 + n_m), (i_1 + n_m)] <- T_1[2, 2] * K_1[i_1, i_1]   
+    # diagonal elements of bottom right block
+    
+    # now T_2_otimes_K_2
+    
+    T_2_otimes_K_2[i_1, i_1] <- T_2[1, 1] * K_2[i_1, i_1]                    
+    # diagonal elements of top left block
+    
+    T_2_otimes_K_2[i_1, (i_1 + n_m)] <- T_2[1, 2] * K_2[i_1, i_1]           
+    # diagonal elements of top right block
+    
+    T_2_otimes_K_2[(i_1 + n_m), i_1] <- T_2[2, 1] * K_2[i_1, i_1]           
+    # diagonal elements of bottom left block
+    
+    T_2_otimes_K_2[(i_1 + n_m), (i_1 + n_m)] <- T_2[2, 2] * K_2[i_1, i_1]   
+    # diagonal elements of bottom right block
+    
+    
+    for(i_2 in (i_1+1):n_m){
+      
+      # again, firstly looking at T_1_otimes_K_1
+      
+      T_1_otimes_K_1[i_1, i_2] <- T_1[1, 1] * K_1[i_1, i_2]                            
+      # upper triangular of top left block
+      
+      T_1_otimes_K_1[i_2, i_1] <- T_1_otimes_K_1[i_1, i_2]                            
+      # lower triangular of top left block
+      
+      T_1_otimes_K_1[i_1, (i_2 + n_m)] <- T_1[1, 2] * K_1[i_1, i_2]                   
+      # upper triangular of top right block
+      
+      T_1_otimes_K_1[i_2, (i_1 + n_m)] <- T_1_otimes_K_1[i_1, (i_2 + n_m)]          
+      # lower triangular of top right block
+      
+      T_1_otimes_K_1[(i_1 + n_m), i_2] <- T_1[2, 1] * K_1[i_1, i_2]                   
+      # upper triangular of bottom left block
+      
+      T_1_otimes_K_1[(i_2 + n_m), i_1] <- T_1_otimes_K_1[(i_1 + n_m), i_2]          
+      # lower triangular of bottom left block
+      
+      T_1_otimes_K_1[(i_1 + n_m), (i_2 + n_m)] <- T_1[2, 2] * K_1[i_1, i_2]           
+      # upper triangular of bottom right block
+      
+      T_1_otimes_K_1[(i_2 + n_m), (i_1 + n_m)] <- T_1_otimes_K_1[i_1, (i_2 + n_m)]  
+      # lower triangular of bottom right block
+      
+      # now looking at T_2_otimes_K_2
+      
+      T_2_otimes_K_2[i_1, i_2] <- T_2[1, 1] * K_2[i_1, i_2]                            
+      # upper triangular of top left block
+      
+      T_2_otimes_K_2[i_2, i_1] <- T_2_otimes_K_2[i_1, i_2]                            
+      # lower triangular of top left block
+      
+      T_2_otimes_K_2[i_1, (i_2 + n_m)] <- T_2[1, 2] * K_2[i_1, i_2]                   
+      # upper triangular of top right block
+      
+      T_2_otimes_K_2[i_2, (i_1 + n_m)] <- T_2_otimes_K_2[i_1, (i_2 + n_m)]          
+      # lower triangular of top right block
+      
+      T_2_otimes_K_2[(i_1 + n_m), i_2] <- T_2[2, 1] * K_2[i_1, i_2]                   
+      # upper triangular of bottom left block
+      
+      T_2_otimes_K_2[(i_2 + n_m), i_1] <- T_2_otimes_K_2[(i_1 + n_m), i_2]          
+      # lower triangular of bottom left block
+      
+      T_2_otimes_K_2[(i_1 + n_m), (i_2 + n_m)] <- T_2[2, 2] * K_2[i_1, i_2]           
+      # upper triangular of bottom right block
+      
+      T_2_otimes_K_2[(i_2 + n_m), (i_1 + n_m)] <- T_2_otimes_K_2[i_1, (i_2 + n_m)]  
+      # lower triangular of bottom right block
+      
+    }
+    
+  }
+  
+  # matrices T_1 and T_2 are some measure of signal covariance for the outputs
+  # off-diagonals are products of standard deviations
+  # of each output and the correlation between
+  
+  T_1[1, 2] <- tau[1] * tau[2] * rho_T
+  #T_1[1, 2] <- tau[1, 1] * tau[2, 1] * rho_T[1]         
+  
+  T_1[2, 1] <- T_1[1, 2]                          
+  
+  #T_2[1, 2] <- tau[1, 2] * tau[2, 2] * rho_T[2] # new T_2
+  
+  # correlation
+  rho_T ~ dunif(-1, 1)                       
+  #rho_T[2] ~ dunif(-1, 1)                       
+  
+  #T_2[1, 2] <- lambda * T_1[1, 2] # scalar lambda
+  
+  T_2[1, 2] <- lambda[1] * lambda[2] * T_1[1, 2] # lambda vector
+  
+  T_2[2, 1] <- T_2[1, 2]
+  
+  #lambda ~ dunif(0, 2)
+  
+  lambda[1] ~ dunif(0, 5)
+  
+  lambda[2] ~ dunif(0, 5)
+  
+  for(i_1 in 1:n_m){
+    
+    mu[i_1] <- alpha[1]                     
+    # mean for the GP prior, each output has unique
+    # mean, with same prior
+    
+    mu[i_1 + n_m] <- alpha[2]
+    
+    K_1[i_1, i_1] <- 1     
+    # note that tau is removed from covariance kernel,
+    #and Xt[i_1, d]-Xt[i_1, d]=0 and exp(0)=1
+    
+    K_2[i_1, i_1] <- 1     
+    
+    for(i_2 in (i_1+1):n_m){
+      
+      for(d in 1:dim.X){
+        
+        Xt_squared_1[i_1, i_2, d] <- pow( Xt[i_1, d] - Xt[i_2,d] , 2) / l_1[d]^2
+        
+        Xt_squared_2[i_1, i_2, d] <- pow( Xt[i_1, d] - Xt[i_2, d] , 2) / l_2[d]^2
+        # Euclidean norm, scaling distance for each input
+        
+      }
+      
+      sum_Xt_squared_scaled_1[i_1, i_2] <- sum(Xt_squared_1[i_1, i_2, 1:dim.X]) 
+      
+      sum_Xt_squared_scaled_2[i_1, i_2] <- sum(Xt_squared_2[i_1, i_2, 1:dim.X]) 
+      
+      K_1[i_1, i_2] <- exp( -0.5 * sum_Xt_squared_scaled_1[i_1, i_2] )            
+      # squared exponential kernel upper triangular matrix
+      
+      K_1[i_2, i_1] <- K_1[i_1, i_2]                                              
+      # squared exponential kernel lower triangular matrix
+      
+      K_2[i_1, i_2] <- exp( -0.5 * sum_Xt_squared_scaled_2[i_1, i_2] )            
+      # squared exponential kernel upper triangular matrix
+      
+      K_2[i_2, i_1] <- K_2[i_1, i_2]                                              
+      # squared exponential kernel lower triangular matrix
+      
+    }
+    
+  }
+  
+  for(d_X in 1:dim.X){
+    
+    l_1[d_X] ~ dgamma(l_shape[d_X], l_shape[d_X] / l_mean[d_X])
+    
+    l_2[d_X] ~ dgamma(l_shape[d_X], l_shape[d_X] / l_mean[d_X])
+    
+    # distance-scale parameter for covariance kernel k_{ARD},
+    # initial parameterisation
+    
+    #l[d_X] <- k_l[d_X, 1] * sigma[1] + k_l[d_X, 2] * sigma[2]   
+    #                            ""                         ,
+    # reparameterisation
+    
+    #k_l[d_X, 1] ~ dunif(k_l_lower,k_l_upper)                    
+    # scalar for sigma[1] w.r.t. l[d_X] in reparameterisation
+    
+    #k_l[d_X, 2] ~ dunif(k_l_lower,k_l_upper)                    
+    # scalar for sigma[2] w.r.t. l[d_X] in reparameterisation
+    
+  }
+  
+  for(d_Y in 1:2){
+  
+    tau[d_Y] ~ dgamma(tau_shape, tau_shape / tau_mean) 
+    #tau[d_Y, 2] ~ dgamma(tau_shape, tau_shape / tau_mean) 
+    # signal standard deviation for each output, initial parameterisation
+  
+    #tau[d_Y] <- k_tau[d_Y] * sigma[d_Y]               
+    #                    ""                    , reparameterisation
+    
+    #k_tau[d_Y] ~ dunif(k_tau_lower, k_tau_upper)       
+    # scalar for relationship between tau[d_Y] and sigma
+     
+    #alpha[d_Y] ~ dnorm(0, 0.01)                       
+    alpha[d_Y] ~ dnorm(mu_alpha[d_Y], tau_alpha[d_Y])                       
+    # output mean (separate means for each output)
+    
+    T_1[d_Y, d_Y] <- pow(tau[d_Y], 2)                     
+    # diagonal elements of T are signal variance for the outputs
+    
+    #T_2[d_Y, d_Y] <- pow(tau[d_Y, 2], 2) # completely different T_2                     
+    
+    T_2[d_Y, d_Y] <- pow(lambda[d_Y], 2) * T_1[d_Y, d_Y] # related T_2, lambda vector
+    
+    sigma[d_Y] ~ dgamma(sigma_shape, sigma_shape / sigma_mean)  
+    # model error standard deviation for each output
+    
+    #tau_epsilon[d_Y] ~ dgamma(a_epsilon[d_Y], b_epsilon[d_Y])
+    #sigma[d_Y] <- pow(tau_epsilon[d_Y], -0.5)
+    # using informed prior for model error precision, then converting to 
+    # model error standard deviation for each output 
+  
+  }
+  
+  #for(d_X_m in 1:dim.X.marginal){
+  
+  #  tau_X_marginal[d_X_m] ~ dgamma(a_X, b_X)         
+  # within-materials precision for inputs, unique replicates
+  
+  #}
+  
+  tau_X_joint ~ dwish(scaleX_0, nu_X)                 
+  # within-materials precision for inputs, joint replicates
+  
+  tau_Xt ~ dwish(scaleXt_0, nu_Xt)                    
+  # between-materials precision
+  
+  for(d_Y_m in 1:dim.Y.marginal){
+  
+    tau_Y_marginal[d_Y_m] ~ dgamma(a_Y[d_Y_m], b_Y[d_Y_m])         
+    # within-materials precision for outputs, unique replicates
+  
+  }
+  
+  # tau_Y_joint ~ dwish(scaleY_0, nu_Y)                 
+  # within-materials precision for outputs, joint replicates
+  
+  for(i in 1:n_m){
+    
+    Xt[i,1:dim.X] ~ dmnorm(mu_X, tau_Xt)        
+    # joint normal distribution for true input values for given material i
+    
+    #  for(d_X_m in 1:dim.X.marginal){
+    
+    #    for(k_X_m in 1:n_c[d_X_m]){      
+    # observed data for inputs if unique replicates
+    
+    #    X__marginal[i, k_X_m, d_X_m] ~ dnorm(Xt[i, d_X_m], tau_X_marginal[d_X_m]) 
+    
+    #  }
+    
+    #}
+    
+    
+    for(k_X_j in 1:n_c[1+dim.X.marginal]){      
+    # observed data for inputs, same replicate over the inputs
+      
+      X__joint[i, k_X_j, 1:dim.X.joint] ~ dmnorm(Xt[i, (dim.X.marginal+1):dim.X], tau_X_joint)
+      
+    }
+    
+    for(k_Y_m in 1:n_r[1]){     
+    # observed data for first output, if unique replicates
+    
+        Y__marginal[i, k_Y_m, 1] ~ dnorm(Yt[i], tau_Y_marginal[1]) 
+    
+      }
+      
+    for(k_Y_m in 1:n_r[2]){     
+    # observed data for second output, if unique replicates
+    
+        Y__marginal[i, k_Y_m, 2] ~ dnorm(Yt[(i+n_m)], tau_Y_marginal[2])
+    
+    }
+    
+    # for(k_Y_j in 1:n_r[1+dim.Y.marginal]){      
+    # observed data for outputs, same replicate over the outputs
+      
+    #   Y__joint[i, k_Y_j, 1:dim.Y.joint] ~ dmnorm(Yt[(i*(dim.Y.marginal+1)):(i*dim.Y)], tau_Y_joint)
+      
+    # }
+    
+  }
+  
+}
